@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import App from './App';
+import App from './App';             // 👈 ESTA LÍNEA ES CLAVE
 import Reportes from './Reportes';
 
 export default function Router() {
@@ -12,3 +12,4 @@ export default function Router() {
     </BrowserRouter>
   );
 }
+
