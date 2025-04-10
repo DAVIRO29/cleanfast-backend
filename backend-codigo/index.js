@@ -15,13 +15,16 @@ const tiendas = [
   { nombre: 'Tienda Washington', lat: 38.650909, lng: -77.287941 },
 ];
 
-const RADIO_PERMITIDO = 1000; // 5km (puedes bajarlo a 200–300m en producción)
-const secreto = 'EMPRESA_TOTP_SECRETA_1234'; // Usa uno más seguro en producción
+// Configuración de código TOTP
+const RADIO_PERMITIDO = 1000; // en metros (puedes ajustarlo)
+const secreto = 'EMPRESA_TOTP_SECRETA_1234'; // secreto base para TOTP
+const stepTiempo = 300; // duración del código en segundos (5 minutos)
+const toleranciaVentana = 2; // actual ±1 ventana (10 minutos total)
 
-// Calcular distancia (haversine)
+// Calcular distancia (Haversine)
 const calcularDistancia = (lat1, lng1, lat2, lng2) => {
   const toRad = (x) => (x * Math.PI) / 180;
-  const R = 6371e3; // radio tierra en metros
+  const R = 6371e3;
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
   const a =
@@ -31,7 +34,7 @@ const calcularDistancia = (lat1, lng1, lat2, lng2) => {
   return R * c;
 };
 
-// Obtener tienda más cercana dentro del radio permitido
+// Buscar la tienda más cercana dentro del radio permitido
 const obtenerTiendaMasCercana = (lat, lng) => {
   const tiendasEnRango = tiendas
     .map((tienda) => ({
@@ -42,11 +45,10 @@ const obtenerTiendaMasCercana = (lat, lng) => {
 
   if (tiendasEnRango.length === 0) return null;
 
-  // Ordena por distancia ascendente
   return tiendasEnRango.sort((a, b) => a.distancia - b.distancia)[0];
 };
 
-// Ruta para generar código dinámico
+// Ruta: generar código dinámico
 app.post('/generar-codigo', (req, res) => {
   const { lat, lng } = req.body;
   console.log('Ubicación recibida (generar):', lat, lng);
@@ -56,14 +58,14 @@ app.post('/generar-codigo', (req, res) => {
     return res.status(403).json({ error: 'No estás cerca de una tienda autorizada.' });
   }
 
-  const codigo = totp.generate(secreto, { step: 300 }); // válido por 5 minutos
+  const codigo = totp.generate(secreto, { step: stepTiempo });
   res.json({
     codigo,
     tienda: tiendaCercana.nombre,
   });
 });
 
-// Ruta para registrar ingreso/salida
+// Ruta: registrar ingreso o salida
 app.post('/registrar', (req, res) => {
   const { nombre, tipo, codigoIngresado, lat, lng } = req.body;
   console.log('Ubicación recibida (registrar):', lat, lng);
@@ -73,7 +75,11 @@ app.post('/registrar', (req, res) => {
     return res.status(403).json({ error: 'Ubicación inválida.' });
   }
 
-  const valido = totp.check(codigoIngresado, secreto, { step: 300, window: 2 });
+  const valido = totp.check(codigoIngresado, secreto, {
+    step: stepTiempo,
+    window: toleranciaVentana, // actual, anterior y siguiente
+  });
+
   if (!valido) {
     return res.status(403).json({ error: 'Código incorrecto o expirado.' });
   }
