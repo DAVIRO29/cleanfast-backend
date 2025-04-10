@@ -25,7 +25,7 @@ export default function App() {
       async ({ coords }) => {
         setCoords(coords);
         try {
-          const res = await axios.post('http://localhost:4000/generar-codigo', {
+          const res = await axios.post('https://cleanfast-backend.onrender.com/generar-codigo', {
             lat: coords.latitude,
             lng: coords.longitude,
           });
@@ -44,7 +44,7 @@ export default function App() {
   const enviarFormulario = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post('http://localhost:4000/registrar', {
+      const res = await axios.post('https://cleanfast-backend.onrender.com/registrar', {
         ...form,
         lat: coords.latitude,
         lng: coords.longitude,
