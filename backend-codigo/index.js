@@ -3,25 +3,23 @@ const cors = require('cors');
 const { totp } = require('otplib');
 const fs = require('fs');
 const path = require('path');
-
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
-// Lista de tiendas con nombres reales y coordenadas
 const tiendas = [
+  { nombre: 'Tienda Bangkok', lat: 6.145572, lng: -75.616028 },
   { nombre: 'Tienda Alcaldía', lat: 6.149122, lng: -75.619144 },
   { nombre: 'Tienda EPM', lat: 6.245044, lng: -75.577914 },
   { nombre: 'Tienda Washington', lat: 38.650909, lng: -77.287941 },
 ];
 
-// Configuración de código TOTP
-const RADIO_PERMITIDO = 1000; // en metros (puedes ajustarlo)
-const secreto = 'EMPRESA_TOTP_SECRETA_1234'; // secreto base para TOTP
-const stepTiempo = 300; // duración del código en segundos (5 minutos)
-const toleranciaVentana = 2; // actual ±1 ventana (10 minutos total)
+const RADIO_PERMITIDO = 1000;
+const secreto = 'EMPRESA_TOTP_SECRETA_1234';
+const stepTiempo = 300;
+const toleranciaVentana = 2;
 
-// Calcular distancia (Haversine)
 const calcularDistancia = (lat1, lng1, lat2, lng2) => {
   const toRad = (x) => (x * Math.PI) / 180;
   const R = 6371e3;
@@ -34,7 +32,6 @@ const calcularDistancia = (lat1, lng1, lat2, lng2) => {
   return R * c;
 };
 
-// Buscar la tienda más cercana dentro del radio permitido
 const obtenerTiendaMasCercana = (lat, lng) => {
   const tiendasEnRango = tiendas
     .map((tienda) => ({
@@ -48,7 +45,6 @@ const obtenerTiendaMasCercana = (lat, lng) => {
   return tiendasEnRango.sort((a, b) => a.distancia - b.distancia)[0];
 };
 
-// Ruta: generar código dinámico
 app.post('/generar-codigo', (req, res) => {
   const { lat, lng } = req.body;
   console.log('Ubicación recibida (generar):', lat, lng);
@@ -65,7 +61,6 @@ app.post('/generar-codigo', (req, res) => {
   });
 });
 
-// Ruta: registrar ingreso o salida
 app.post('/registrar', (req, res) => {
   const { nombre, tipo, codigoIngresado, lat, lng } = req.body;
   console.log('Ubicación recibida (registrar):', lat, lng);
@@ -77,7 +72,7 @@ app.post('/registrar', (req, res) => {
 
   const valido = totp.check(codigoIngresado, secreto, {
     step: stepTiempo,
-    window: toleranciaVentana, // actual, anterior y siguiente
+    window: toleranciaVentana,
   });
 
   if (!valido) {
@@ -94,7 +89,62 @@ app.post('/registrar', (req, res) => {
   });
 });
 
-// Iniciar servidor
+// ✅ NUEVA RUTA: REPORTES
+app.get('/reportes', (req, res) => {
+  const { tipo, fecha, tienda, empleado, desde, hasta } = req.query;
+  const archivo = path.join(__dirname, 'registros.csv');
+
+  if (!fs.existsSync(archivo)) {
+    return res.status(404).json({ error: 'No hay registros disponibles.' });
+  }
+
+  const registros = fs.readFileSync(archivo, 'utf-8')
+    .trim()
+    .split('\n')
+    .map(linea => {
+      const [timestamp, nombre, tipo, tienda, lat, lng] = linea.split(',');
+      return { timestamp, nombre, tipo, tienda, lat, lng };
+    });
+
+  let filtrados = registros;
+
+  // Filtros generales
+  if (fecha) {
+    filtrados = filtrados.filter(r => r.timestamp.startsWith(fecha));
+  }
+
+  if (desde && hasta) {
+    filtrados = filtrados.filter(r =>
+      r.timestamp >= `${desde}T00:00:00` && r.timestamp <= `${hasta}T23:59:59`
+    );
+  }
+
+  if (tienda) {
+    filtrados = filtrados.filter(r => r.tienda === tienda);
+  }
+
+  if (empleado) {
+    filtrados = filtrados.filter(r => r.nombre === empleado);
+  }
+
+  // Agrupación para reporte resumen ejecutivo
+  if (tipo === 'resumen') {
+    const resumen = {};
+
+    filtrados.forEach((r) => {
+      if (!resumen[r.tienda]) {
+        resumen[r.tienda] = { registros: 0 };
+      }
+      resumen[r.tienda].registros++;
+    });
+
+    return res.json(resumen);
+  }
+
+  // Envío de datos planos para los otros tipos
+  return res.json(filtrados);
+});
+
 app.listen(4000, () => {
   console.log('✅ Backend corriendo en http://localhost:4000');
 });
