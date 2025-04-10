@@ -33,8 +33,13 @@ export default function App() {
           setTienda(res.data.tienda);
           const empleados = empleadosPorTienda[res.data.tienda] || [];
           setEmpleadosDisponibles(empleados);
+          setError('');
         } catch (e) {
-          setError(e.response?.data?.error || 'Error al generar código.');
+          if (e.response?.status === 403 && e.response.data?.error?.includes('No estás cerca')) {
+            setError('🚫 No es posible registrar el acceso porque no estás dentro de una tienda autorizada.');
+          } else {
+            setError(e.response?.data?.error || 'Error al generar código.');
+          }
         }
       },
       () => setError('Debes activar la ubicación GPS para continuar.')
@@ -75,44 +80,52 @@ export default function App() {
 
       <hr style={{ margin: '30px 0' }} />
 
-      <h2>Formulario de Registro</h2>
-      <form onSubmit={enviarFormulario}>
-        <select
-          value={form.nombre}
-          onChange={(e) => setForm({ ...form, nombre: e.target.value })}
-          required
-        >
-          <option value="">Selecciona tu nombre</option>
-          {empleadosDisponibles.map((empleado) => (
-            <option key={empleado} value={empleado}>
-              {empleado}
-            </option>
-          ))}
-        </select>
-        <br /><br />
+      {error && (
+        <p style={{ color: 'red', fontWeight: 'bold', marginTop: '20px' }}>{error}</p>
+      )}
 
-        <select
-          value={form.tipo}
-          onChange={(e) => setForm({ ...form, tipo: e.target.value })}
-        >
-          <option value="ingreso">Ingreso</option>
-          <option value="salida">Salida</option>
-        </select>
-        <br /><br />
-        <input
-          type="text"
-          placeholder="Código mostrado"
-          value={form.codigoIngresado}
-          onChange={(e) => setForm({ ...form, codigoIngresado: e.target.value })}
-          required
-        />
-        <br /><br />
-        <button type="submit">Registrar</button>
-      </form>
+      {tienda && (
+        <>
+          <h2>Formulario de Registro</h2>
+          <form onSubmit={enviarFormulario}>
+            <select
+              value={form.nombre}
+              onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+              required
+            >
+              <option value="">Selecciona tu nombre</option>
+              {empleadosDisponibles.map((empleado) => (
+                <option key={empleado} value={empleado}>
+                  {empleado}
+                </option>
+              ))}
+            </select>
+            <br /><br />
+
+            <select
+              value={form.tipo}
+              onChange={(e) => setForm({ ...form, tipo: e.target.value })}
+            >
+              <option value="ingreso">Ingreso</option>
+              <option value="salida">Salida</option>
+            </select>
+            <br /><br />
+
+            <input
+              type="text"
+              placeholder="Código mostrado"
+              value={form.codigoIngresado}
+              onChange={(e) => setForm({ ...form, codigoIngresado: e.target.value })}
+              required
+            />
+            <br /><br />
+            <button type="submit">Registrar</button>
+          </form>
+        </>
+      )}
 
       <br />
       {mensaje && <p style={{ color: 'green' }}>{mensaje}</p>}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
     </div>
   );
 }

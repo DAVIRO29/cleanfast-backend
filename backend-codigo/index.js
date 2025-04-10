@@ -10,12 +10,12 @@ app.use(express.json());
 
 // Lista de tiendas con nombres reales y coordenadas
 const tiendas = [
-  { nombre: 'Tienda Bangkok', lat: 6.146102, lng: -75.616262 },
   { nombre: 'Tienda Alcaldía', lat: 6.149122, lng: -75.619144 },
   { nombre: 'Tienda EPM', lat: 6.245044, lng: -75.577914 },
+  { nombre: 'Tienda Washington', lat: 38.650909, lng: -77.287941 },
 ];
 
-const RADIO_PERMITIDO = 5000; // 5km (puedes bajarlo a 200–300m en producción)
+const RADIO_PERMITIDO = 1000; // 5km (puedes bajarlo a 200–300m en producción)
 const secreto = 'EMPRESA_TOTP_SECRETA_1234'; // Usa uno más seguro en producción
 
 // Calcular distancia (haversine)
