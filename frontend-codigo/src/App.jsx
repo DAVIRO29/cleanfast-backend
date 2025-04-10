@@ -3,17 +3,12 @@ import axios from 'axios';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Reportes from './Reportes';
 
-<BrowserRouter>
-  <Routes>
-    <Route path="/" element={<Home />} />
-    <Route path="/reportes" element={<Reportes />} />
-  </Routes>
-</BrowserRouter>
 
 const empleadosPorTienda = {
   'Tienda Bangkok': ['DR1', 'DR2'],
   'Tienda Alcaldía': ['CM1', 'CM2', 'CM3'],
   'Tienda EPM': ['DM1', 'DM2'],
+  'Tienda Washington': ['Carlos Marin', 'CM'],
 };
 
 export default function App() {
