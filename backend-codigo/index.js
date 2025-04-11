@@ -1,4 +1,4 @@
-// index.js (Backend completo con gestión de dispositivos y reportes)
+// index.js (Backend con verificación de clave de seguridad)
 const express = require('express');
 const cors = require('cors');
 const { totp } = require('otplib');
@@ -20,6 +20,7 @@ const tiendas = [
 const RADIO_PERMITIDO = 1000;
 const secreto = process.env.TOTP_SECRET || 'EMPRESA_TOTP_SECRETA_1234';
 const dispositivosPath = path.join(__dirname, 'dispositivos.json');
+const clavesPath = path.join(__dirname, 'claves.json');
 const registrosPath = path.join(__dirname, 'registros.csv');
 
 const calcularDistancia = (lat1, lng1, lat2, lng2) => {
@@ -50,6 +51,11 @@ const cargarDispositivos = () => {
 
 const guardarDispositivos = (data) => {
   fs.writeFileSync(dispositivosPath, JSON.stringify(data, null, 2));
+};
+
+const cargarClaves = () => {
+  if (!fs.existsSync(clavesPath)) return {};
+  return JSON.parse(fs.readFileSync(clavesPath));
 };
 
 app.post('/identificar-empleado', (req, res) => {
@@ -88,23 +94,22 @@ app.post('/registrar', (req, res) => {
   });
 });
 
-// Registro de dispositivo (empleado)
 app.post('/registrar-dispositivo', (req, res) => {
-  const { nombre, deviceId } = req.body;
-  if (!nombre || !deviceId) return res.status(400).json({ error: 'Faltan datos' });
+  const { nombre, deviceId, clave } = req.body;
+  if (!nombre || !deviceId || !clave) return res.status(400).json({ error: 'Faltan datos' });
+  const claves = cargarClaves();
+  if (claves[nombre] !== clave) return res.status(403).json({ error: 'Clave de seguridad incorrecta' });
   const mapa = cargarDispositivos();
   mapa[nombre] = deviceId;
   guardarDispositivos(mapa);
   res.json({ mensaje: 'Dispositivo registrado con éxito' });
 });
 
-// Ver dispositivos
 app.get('/dispositivos', (req, res) => {
   const mapa = cargarDispositivos();
   res.json(mapa);
 });
 
-// Eliminar un usuario
 app.delete('/dispositivos/:nombre', (req, res) => {
   const mapa = cargarDispositivos();
   delete mapa[req.params.nombre];
@@ -112,7 +117,6 @@ app.delete('/dispositivos/:nombre', (req, res) => {
   res.json({ mensaje: 'Dispositivo eliminado' });
 });
 
-// Actualizar deviceId
 app.put('/dispositivos/:nombre', (req, res) => {
   const { deviceId } = req.body;
   if (!deviceId) return res.status(400).json({ error: 'Falta el deviceId' });
@@ -122,7 +126,6 @@ app.put('/dispositivos/:nombre', (req, res) => {
   res.json({ mensaje: 'Dispositivo actualizado' });
 });
 
-// Reportes (como estaban)
 const leerCSV = (callback) => {
   const resultados = [];
   fs.createReadStream(registrosPath)

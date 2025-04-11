@@ -3,9 +3,18 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 
+const empleadosPorTienda = {
+  'Tienda Bangkok': ['DR1', 'DR2'],
+  'Tienda Alcaldía': ['CM1', 'CM2', 'CM3'],
+  'Tienda EPM': ['DM1', 'DM2'],
+  'Tienda Washington': ['Carlos Marin', 'CM'],
+};
+
 export default function RegistroCel() {
   const [deviceId, setDeviceId] = useState('');
-  const [nombre, setNombre] = useState('');
+  const [tiendaSeleccionada, setTiendaSeleccionada] = useState('');
+  const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState('');
+  const [claveSeguridad, setClaveSeguridad] = useState('');
   const [mensaje, setMensaje] = useState('');
   const [error, setError] = useState('');
   const [dispositivos, setDispositivos] = useState([]);
@@ -21,14 +30,22 @@ export default function RegistroCel() {
   }, []);
 
   const registrar = async () => {
+    if (!tiendaSeleccionada || !empleadoSeleccionado || !claveSeguridad) {
+      return setError('Completa todos los campos.');
+    }
+
     try {
+      const nombre = empleadoSeleccionado;
       const res = await axios.post('https://cleanfast-backend.onrender.com/registrar-dispositivo', {
         nombre,
         deviceId,
+        clave: claveSeguridad,
       });
       setMensaje(res.data.mensaje);
       setError('');
-      setNombre('');
+      setTiendaSeleccionada('');
+      setEmpleadoSeleccionado('');
+      setClaveSeguridad('');
     } catch (err) {
       setError(err.response?.data?.error || 'Error registrando');
       setMensaje('');
@@ -55,18 +72,49 @@ export default function RegistroCel() {
 
   return (
     <div style={{ textAlign: 'center', padding: '40px' }}>
-      <h1>Registro de Dispositivo</h1>
-      <p><strong>Tu deviceId es:</strong> {deviceId}</p>
+      <h1>Registro de Celular</h1>
+      <p style={{ fontSize: '16px', maxWidth: '600px', margin: '0 auto 20px' }}>
+        Bienvenido al sistema de registro de asistencia de empleados. Aquí deberás registrar <strong>únicamente el celular</strong> desde donde harás tus registros diarios de ingreso y salida. Este dispositivo será asociado a tu nombre y tienda. Para mayor seguridad, también se te pedirá una clave única entregada por tu supervisor.
+      </p>
 
-      <input
-        placeholder="Tu nombre"
-        value={nombre}
-        onChange={(e) => setNombre(e.target.value)}
-      />
-      <button onClick={registrar}>Registrar</button>
+      <div>
+        <select
+          value={tiendaSeleccionada}
+          onChange={(e) => setTiendaSeleccionada(e.target.value)}
+        >
+          <option value="">Selecciona tu tienda</option>
+          {Object.keys(empleadosPorTienda).map((tienda) => (
+            <option key={tienda} value={tienda}>{tienda}</option>
+          ))}
+        </select>
+        <br /><br />
 
-      {mensaje && <p style={{ color: 'green' }}>{mensaje}</p>}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+        {tiendaSeleccionada && (
+          <select
+            value={empleadoSeleccionado}
+            onChange={(e) => setEmpleadoSeleccionado(e.target.value)}
+          >
+            <option value="">Selecciona tu nombre</option>
+            {empleadosPorTienda[tiendaSeleccionada].map((nombre) => (
+              <option key={nombre} value={nombre}>{nombre}</option>
+            ))}
+          </select>
+        )}
+        <br /><br />
+
+        <input
+          type="password"
+          placeholder="Clave de seguridad"
+          value={claveSeguridad}
+          onChange={(e) => setClaveSeguridad(e.target.value)}
+        />
+        <br /><br />
+
+        <button onClick={registrar}>Registrar mi celular</button>
+
+        {mensaje && <p style={{ color: 'green' }}>{mensaje}</p>}
+        {error && <p style={{ color: 'red' }}>{error}</p>}
+      </div>
 
       <hr style={{ margin: '40px 0' }} />
 
