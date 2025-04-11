@@ -5,7 +5,7 @@ const empleadosPorTienda = {
   'Tienda Bangkok': ['DR1', 'DR2'],
   'Tienda Alcaldía': ['CM1', 'CM2', 'CM3'],
   'Tienda EPM': ['DM1', 'DM2'],
-  'Tienda Washington': ['Carlos Marin', 'CM'],
+  'Tienda New York': ['Carlos Marin', 'Carlos M'],
 };
 
 export default function App() {
