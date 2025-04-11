@@ -1,27 +1,26 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-
-const empleadosPorTienda = {
-  'Tienda Bangkok': ['DR1', 'DR2'],
-  'Tienda Alcaldía': ['CM1', 'CM2', 'CM3'],
-  'Tienda EPM': ['DM1', 'DM2'],
-  'Tienda New York': ['Carlos Marin', 'Carlos M'],
-};
+import { v4 as uuidv4 } from 'uuid';
 
 export default function App() {
   const [codigo, setCodigo] = useState('');
   const [tienda, setTienda] = useState('');
-  const [empleadosDisponibles, setEmpleadosDisponibles] = useState([]);
+  const [nombreEmpleado, setNombreEmpleado] = useState('');
   const [error, setError] = useState('');
   const [coords, setCoords] = useState(null);
   const [mostrarCoords, setMostrarCoords] = useState(false);
-  const [form, setForm] = useState({
-    nombre: '',
-    tipo: 'ingreso',
-    codigoIngresado: '',
-  });
+  const [form, setForm] = useState({ tipo: 'ingreso', codigoIngresado: '' });
   const [mensaje, setMensaje] = useState('');
   const [cargando, setCargando] = useState(true);
+
+  const obtenerDeviceId = () => {
+    let id = localStorage.getItem('userDeviceId');
+    if (!id) {
+      id = uuidv4();
+      localStorage.setItem('userDeviceId', id);
+    }
+    return id;
+  };
 
   const obtenerCodigo = async (coordenadas) => {
     try {
@@ -31,25 +30,29 @@ export default function App() {
       });
       setCodigo(res.data.codigo);
       setTienda(res.data.tienda);
-      const empleados = empleadosPorTienda[res.data.tienda] || [];
-      setEmpleadosDisponibles(empleados);
       setError('');
     } catch (e) {
-      if (e.response?.status === 403 && e.response.data?.error?.includes('No estás cerca')) {
-        setError('🚫 No es posible registrar el acceso porque no estás dentro de una tienda autorizada.');
-      } else {
-        setError(e.response?.data?.error || 'Error al generar código.');
-      }
+      setError(e.response?.data?.error || 'Error al generar código.');
     } finally {
       setCargando(false);
     }
   };
 
   useEffect(() => {
+    const deviceId = obtenerDeviceId();
     navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
+      async ({ coords }) => {
         setCoords(coords);
-        obtenerCodigo(coords);
+        await obtenerCodigo(coords);
+
+        try {
+          const res = await axios.post('https://cleanfast-backend.onrender.com/identificar-empleado', {
+            deviceId,
+          });
+          setNombreEmpleado(res.data.nombre);
+        } catch (e) {
+          setError('Este dispositivo no está autorizado para ningún empleado.');
+        }
       },
       () => {
         setError('Debes activar la ubicación GPS para continuar.');
@@ -64,11 +67,13 @@ export default function App() {
 
   const enviarFormulario = async (e) => {
     e.preventDefault();
+    const deviceId = obtenerDeviceId();
     try {
       const res = await axios.post('https://cleanfast-backend.onrender.com/registrar', {
         ...form,
         lat: coords.latitude,
         lng: coords.longitude,
+        deviceId,
       });
       setMensaje(res.data.mensaje);
       setError('');
@@ -103,7 +108,7 @@ export default function App() {
         </>
       )}
 
-      {!cargando && tienda && (
+      {!cargando && tienda && nombreEmpleado && (
         <>
           <h2 style={{ fontSize: '28px' }}>Formulario de Registro</h2>
 
@@ -118,21 +123,9 @@ export default function App() {
             </div>
           )}
 
-          <form onSubmit={enviarFormulario}>
-            <select
-              value={form.nombre}
-              onChange={(e) => setForm({ ...form, nombre: e.target.value })}
-              required
-            >
-              <option value="">Selecciona tu nombre</option>
-              {empleadosDisponibles.map((empleado) => (
-                <option key={empleado} value={empleado}>
-                  {empleado}
-                </option>
-              ))}
-            </select>
-            <br /><br />
+          <p><strong>Empleado identificado:</strong> {nombreEmpleado}</p>
 
+          <form onSubmit={enviarFormulario}>
             <select
               value={form.tipo}
               onChange={(e) => setForm({ ...form, tipo: e.target.value })}
