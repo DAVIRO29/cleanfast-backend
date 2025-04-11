@@ -1,3 +1,4 @@
+// index.js (Backend completo con gestión de dispositivos y reportes)
 const express = require('express');
 const cors = require('cors');
 const { totp } = require('otplib');
@@ -47,7 +48,10 @@ const cargarDispositivos = () => {
   return JSON.parse(fs.readFileSync(dispositivosPath));
 };
 
-// IDENTIFICACIÓN
+const guardarDispositivos = (data) => {
+  fs.writeFileSync(dispositivosPath, JSON.stringify(data, null, 2));
+};
+
 app.post('/identificar-empleado', (req, res) => {
   const { deviceId } = req.body;
   const mapa = cargarDispositivos();
@@ -56,7 +60,6 @@ app.post('/identificar-empleado', (req, res) => {
   res.json({ nombre });
 });
 
-// GENERAR CÓDIGO
 app.post('/generar-codigo', (req, res) => {
   const { lat, lng } = req.body;
   const tiendaCercana = obtenerTiendaMasCercana(lat, lng);
@@ -65,7 +68,6 @@ app.post('/generar-codigo', (req, res) => {
   res.json({ codigo, tienda: tiendaCercana.nombre });
 });
 
-// REGISTRAR INGRESO/SALIDA
 app.post('/registrar', (req, res) => {
   const { tipo, codigoIngresado, lat, lng, deviceId } = req.body;
   const tiendaCercana = obtenerTiendaMasCercana(lat, lng);
@@ -86,7 +88,41 @@ app.post('/registrar', (req, res) => {
   });
 });
 
-// REPORTES
+// Registro de dispositivo (empleado)
+app.post('/registrar-dispositivo', (req, res) => {
+  const { nombre, deviceId } = req.body;
+  if (!nombre || !deviceId) return res.status(400).json({ error: 'Faltan datos' });
+  const mapa = cargarDispositivos();
+  mapa[nombre] = deviceId;
+  guardarDispositivos(mapa);
+  res.json({ mensaje: 'Dispositivo registrado con éxito' });
+});
+
+// Ver dispositivos
+app.get('/dispositivos', (req, res) => {
+  const mapa = cargarDispositivos();
+  res.json(mapa);
+});
+
+// Eliminar un usuario
+app.delete('/dispositivos/:nombre', (req, res) => {
+  const mapa = cargarDispositivos();
+  delete mapa[req.params.nombre];
+  guardarDispositivos(mapa);
+  res.json({ mensaje: 'Dispositivo eliminado' });
+});
+
+// Actualizar deviceId
+app.put('/dispositivos/:nombre', (req, res) => {
+  const { deviceId } = req.body;
+  if (!deviceId) return res.status(400).json({ error: 'Falta el deviceId' });
+  const mapa = cargarDispositivos();
+  mapa[req.params.nombre] = deviceId;
+  guardarDispositivos(mapa);
+  res.json({ mensaje: 'Dispositivo actualizado' });
+});
+
+// Reportes (como estaban)
 const leerCSV = (callback) => {
   const resultados = [];
   fs.createReadStream(registrosPath)
@@ -137,7 +173,6 @@ app.get('/reportes/resumen', (req, res) => {
   });
 });
 
-// SERVIDOR
 app.listen(4000, () => {
   console.log('✅ Backend corriendo en http://localhost:4000');
 });
