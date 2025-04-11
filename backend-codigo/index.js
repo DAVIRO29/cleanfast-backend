@@ -16,7 +16,7 @@ const tiendas = [
 ];
 
 const RADIO_PERMITIDO = 1000;
-const secreto = 'EMPRESA_TOTP_SECRETA_1234';
+const secreto = process.env.TOTP_SECRET;
 const stepTiempo = 300;
 const toleranciaVentana = 2;
 
