@@ -78,13 +78,6 @@ export default function App() {
 
       {tienda && <h3>📌 Estás en: <strong>{tienda}</strong></h3>}
 
-      {codigo && (
-        <div style={{ margin: '20px 0' }}>
-          <h2 style={{ fontSize: '40px', marginBottom: '10px' }}>{codigo}</h2>
-          <button onClick={copiarCodigo}>📋 Copiar código</button>
-        </div>
-      )}
-
       <hr style={{ margin: '30px 0' }} />
 
       {error && (
@@ -93,7 +86,19 @@ export default function App() {
 
       {tienda && (
         <>
-          <h2>Formulario de Registro</h2>
+          <h2 style={{ fontSize: '28px' }}>Formulario de Registro</h2>
+
+          <p style={{ fontSize: '14px', fontWeight: 'normal', marginBottom: '10px' }}>
+            Este es un <strong>código de seguridad</strong> que valida que te encuentras dentro de la tienda autorizada. Debes ingresarlo en el formulario.
+          </p>
+
+          {codigo && (
+            <div style={{ marginBottom: '20px' }}>
+              <h3 style={{ fontSize: '28px', marginBottom: '8px' }}>{codigo}</h3>
+              <button onClick={copiarCodigo}>📋 Copiar código</button>
+            </div>
+          )}
+
           <form onSubmit={enviarFormulario}>
             <select
               value={form.nombre}
