@@ -21,6 +21,7 @@ export default function App() {
     codigoIngresado: '',
   });
   const [mensaje, setMensaje] = useState('');
+  const [cargando, setCargando] = useState(true);
 
   const obtenerCodigo = async (coordenadas) => {
     try {
@@ -39,6 +40,8 @@ export default function App() {
       } else {
         setError(e.response?.data?.error || 'Error al generar código.');
       }
+    } finally {
+      setCargando(false);
     }
   };
 
@@ -48,7 +51,10 @@ export default function App() {
         setCoords(coords);
         obtenerCodigo(coords);
       },
-      () => setError('Debes activar la ubicación GPS para continuar.')
+      () => {
+        setError('Debes activar la ubicación GPS para continuar.');
+        setCargando(false);
+      }
     );
   }, []);
 
@@ -80,6 +86,8 @@ export default function App() {
         Por favor, verifica que tu ubicación esté activada y procede con el registro.
       </p>
 
+      {cargando && <p style={{ fontStyle: 'italic' }}>📍 Cargando ubicación...</p>}
+
       {tienda && <h3>📌 Estás en: <strong>{tienda}</strong></h3>}
 
       <hr style={{ margin: '30px 0' }} />
@@ -95,7 +103,7 @@ export default function App() {
         </>
       )}
 
-      {tienda && (
+      {!cargando && tienda && (
         <>
           <h2 style={{ fontSize: '28px' }}>Formulario de Registro</h2>
 
