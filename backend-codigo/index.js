@@ -1,14 +1,19 @@
-// index.js (Backend con verificación de clave de seguridad)
+// index.js con PostgreSQL + gestión de dispositivos
 const express = require('express');
 const cors = require('cors');
 const { totp } = require('otplib');
 const fs = require('fs');
 const path = require('path');
-const csv = require('csv-parser');
+const { Pool } = require('pg');
 
 const app = express();
 app.use(cors({ origin: 'https://cleanfast.vercel.app' }));
 app.use(express.json());
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+});
 
 const tiendas = [
   { nombre: 'Tienda Bangkok', lat: 6.145572, lng: -75.616028 },
@@ -21,7 +26,6 @@ const RADIO_PERMITIDO = 1000;
 const secreto = process.env.TOTP_SECRET || 'EMPRESA_TOTP_SECRETA_1234';
 const dispositivosPath = path.join(__dirname, 'dispositivos.json');
 const clavesPath = path.join(__dirname, 'claves.json');
-const registrosPath = path.join(__dirname, 'registros.csv');
 
 const calcularDistancia = (lat1, lng1, lat2, lng2) => {
   const toRad = (x) => (x * Math.PI) / 180;
@@ -58,42 +62,7 @@ const cargarClaves = () => {
   return JSON.parse(fs.readFileSync(clavesPath));
 };
 
-app.post('/identificar-empleado', (req, res) => {
-  const { deviceId } = req.body;
-  const mapa = cargarDispositivos();
-  const nombre = Object.keys(mapa).find((k) => mapa[k] === deviceId);
-  if (!nombre) return res.status(403).json({ error: 'Dispositivo no autorizado' });
-  res.json({ nombre });
-});
-
-app.post('/generar-codigo', (req, res) => {
-  const { lat, lng } = req.body;
-  const tiendaCercana = obtenerTiendaMasCercana(lat, lng);
-  if (!tiendaCercana) return res.status(403).json({ error: 'No estás cerca de una tienda autorizada.' });
-  const codigo = totp.generate(secreto, { step: 300 });
-  res.json({ codigo, tienda: tiendaCercana.nombre });
-});
-
-app.post('/registrar', (req, res) => {
-  const { tipo, codigoIngresado, lat, lng, deviceId } = req.body;
-  const tiendaCercana = obtenerTiendaMasCercana(lat, lng);
-  if (!tiendaCercana) return res.status(403).json({ error: 'Ubicación inválida.' });
-
-  const valido = totp.check(codigoIngresado, secreto, { step: 300, window: 2 });
-  if (!valido) return res.status(403).json({ error: 'Código incorrecto o expirado.' });
-
-  const mapa = cargarDispositivos();
-  const nombre = Object.keys(mapa).find((k) => mapa[k] === deviceId);
-  if (!nombre) return res.status(403).json({ error: 'Dispositivo no registrado para ningún empleado.' });
-
-  const now = new Date().toISOString();
-  const registro = `${now},${nombre},${tipo},${tiendaCercana.nombre},${lat},${lng}\n`;
-  fs.appendFile(registrosPath, registro, (err) => {
-    if (err) return res.status(500).json({ error: 'Error al guardar el registro.' });
-    res.json({ mensaje: 'Registro exitoso. ¡Gracias!' });
-  });
-});
-
+// Registro de dispositivo con clave de seguridad
 app.post('/registrar-dispositivo', (req, res) => {
   const { nombre, deviceId, clave } = req.body;
   if (!nombre || !deviceId || !clave) return res.status(400).json({ error: 'Faltan datos' });
@@ -126,56 +95,109 @@ app.put('/dispositivos/:nombre', (req, res) => {
   res.json({ mensaje: 'Dispositivo actualizado' });
 });
 
-const leerCSV = (callback) => {
-  const resultados = [];
-  fs.createReadStream(registrosPath)
-    .pipe(csv(['fecha', 'nombre', 'tipo', 'tienda', 'lat', 'lng']))
-    .on('data', (data) => resultados.push(data))
-    .on('end', () => callback(resultados));
-};
+// Identificar empleado según deviceId
+app.post('/identificar-empleado', (req, res) => {
+  const { deviceId } = req.body;
+  const mapa = cargarDispositivos();
+  const nombre = Object.keys(mapa).find((k) => mapa[k] === deviceId);
+  if (!nombre) return res.status(403).json({ error: 'Dispositivo no autorizado' });
+  res.json({ nombre });
+});
 
-app.get('/reportes/tienda', (req, res) => {
+// Generar código TOTP
+app.post('/generar-codigo', (req, res) => {
+  const { lat, lng } = req.body;
+  const tiendaCercana = obtenerTiendaMasCercana(lat, lng);
+  if (!tiendaCercana) return res.status(403).json({ error: 'No estás cerca de una tienda autorizada.' });
+  const codigo = totp.generate(secreto, { step: 300 });
+  res.json({ codigo, tienda: tiendaCercana.nombre });
+});
+
+// Registrar ingreso o salida en PostgreSQL
+app.post('/registrar', async (req, res) => {
+  const { tipo, codigoIngresado, lat, lng, deviceId } = req.body;
+  const tiendaCercana = obtenerTiendaMasCercana(lat, lng);
+  if (!tiendaCercana) return res.status(403).json({ error: 'Ubicación inválida.' });
+
+  const valido = totp.check(codigoIngresado, secreto, { step: 300, window: 2 });
+  if (!valido) return res.status(403).json({ error: 'Código incorrecto o expirado.' });
+
+  const mapa = cargarDispositivos();
+  const nombre = Object.keys(mapa).find((k) => mapa[k] === deviceId);
+  if (!nombre) return res.status(403).json({ error: 'Dispositivo no registrado para ningún empleado.' });
+
+  const now = new Date().toISOString();
+
+  try {
+    await pool.query(
+      'INSERT INTO registros (fecha, nombre, tipo, tienda, lat, lng) VALUES ($1, $2, $3, $4, $5, $6)',
+      [now, nombre, tipo, tiendaCercana.nombre, lat, lng]
+    );
+    res.json({ mensaje: 'Registro exitoso. ¡Gracias!' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al guardar en la base de datos' });
+  }
+});
+
+// Reportes PostgreSQL
+app.get('/reportes/tienda', async (req, res) => {
   const { tienda, fecha } = req.query;
-  leerCSV((registros) => {
-    const filtrados = registros.filter(r => r.tienda === tienda && r.fecha.startsWith(fecha));
-    const formateados = filtrados.map(r => ({
-      fecha: r.fecha.slice(0, 16).replace('T', ' - '),
+  try {
+    const result = await pool.query(
+      'SELECT * FROM registros WHERE tienda = $1 AND fecha::text LIKE $2 ORDER BY fecha ASC',
+      [tienda, `${fecha}%`]
+    );
+    const datos = result.rows.map((r) => ({
+      fecha: r.fecha.toISOString().slice(0, 16).replace('T', ' - '),
       nombre: r.nombre,
       tipo: r.tipo,
-      tienda: r.tienda
+      tienda: r.tienda,
     }));
-    res.json(formateados);
-  });
+    res.json(datos);
+  } catch (err) {
+    res.status(500).json({ error: 'Error al consultar datos' });
+  }
 });
 
-app.get('/reportes/empleado', (req, res) => {
+app.get('/reportes/empleado', async (req, res) => {
   const { nombre } = req.query;
-  leerCSV((registros) => {
-    const filtrados = registros.filter(r => r.nombre === nombre);
-    res.json(filtrados);
-  });
+  try {
+    const result = await pool.query('SELECT * FROM registros WHERE nombre = $1 ORDER BY fecha DESC', [nombre]);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Error al consultar datos' });
+  }
 });
 
-app.get('/reportes/rango', (req, res) => {
+app.get('/reportes/rango', async (req, res) => {
   const { inicio, fin } = req.query;
-  leerCSV((registros) => {
-    const filtrados = registros.filter(r => r.fecha >= inicio && r.fecha <= fin);
-    res.json(filtrados);
-  });
+  try {
+    const result = await pool.query(
+      'SELECT * FROM registros WHERE fecha BETWEEN $1 AND $2 ORDER BY fecha ASC',
+      [inicio, fin]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Error al consultar datos' });
+  }
 });
 
-app.get('/reportes/resumen', (req, res) => {
-  leerCSV((registros) => {
+app.get('/reportes/resumen', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT nombre, tipo, COUNT(*) as cantidad FROM registros GROUP BY nombre, tipo');
     const resumen = {};
-    registros.forEach(r => {
-      resumen[r.nombre] = resumen[r.nombre] || { ingresos: 0, salidas: 0 };
-      if (r.tipo === 'ingreso') resumen[r.nombre].ingresos++;
-      if (r.tipo === 'salida') resumen[r.nombre].salidas++;
+    result.rows.forEach((r) => {
+      if (!resumen[r.nombre]) resumen[r.nombre] = { ingresos: 0, salidas: 0 };
+      if (r.tipo === 'ingreso') resumen[r.nombre].ingresos = Number(r.cantidad);
+      if (r.tipo === 'salida') resumen[r.nombre].salidas = Number(r.cantidad);
     });
     res.json(resumen);
-  });
+  } catch (err) {
+    res.status(500).json({ error: 'Error al consultar datos' });
+  }
 });
 
 app.listen(4000, () => {
-  console.log('✅ Backend corriendo en http://localhost:4000');
+  console.log('✅ Backend corriendo con PostgreSQL y gestión de dispositivos');
 });
