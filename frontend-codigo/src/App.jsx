@@ -22,27 +22,31 @@ export default function App() {
   });
   const [mensaje, setMensaje] = useState('');
 
+  const obtenerCodigo = async (coordenadas) => {
+    try {
+      const res = await axios.post('https://cleanfast-backend.onrender.com/generar-codigo', {
+        lat: coordenadas.latitude,
+        lng: coordenadas.longitude,
+      });
+      setCodigo(res.data.codigo);
+      setTienda(res.data.tienda);
+      const empleados = empleadosPorTienda[res.data.tienda] || [];
+      setEmpleadosDisponibles(empleados);
+      setError('');
+    } catch (e) {
+      if (e.response?.status === 403 && e.response.data?.error?.includes('No estás cerca')) {
+        setError('🚫 No es posible registrar el acceso porque no estás dentro de una tienda autorizada.');
+      } else {
+        setError(e.response?.data?.error || 'Error al generar código.');
+      }
+    }
+  };
+
   useEffect(() => {
     navigator.geolocation.getCurrentPosition(
-      async ({ coords }) => {
+      ({ coords }) => {
         setCoords(coords);
-        try {
-          const res = await axios.post('https://cleanfast-backend.onrender.com/generar-codigo', {
-            lat: coords.latitude,
-            lng: coords.longitude,
-          });
-          setCodigo(res.data.codigo);
-          setTienda(res.data.tienda);
-          const empleados = empleadosPorTienda[res.data.tienda] || [];
-          setEmpleadosDisponibles(empleados);
-          setError('');
-        } catch (e) {
-          if (e.response?.status === 403 && e.response.data?.error?.includes('No estás cerca')) {
-            setError('🚫 No es posible registrar el acceso porque no estás dentro de una tienda autorizada.');
-          } else {
-            setError(e.response?.data?.error || 'Error al generar código.');
-          }
-        }
+        obtenerCodigo(coords);
       },
       () => setError('Debes activar la ubicación GPS para continuar.')
     );
@@ -81,7 +85,14 @@ export default function App() {
       <hr style={{ margin: '30px 0' }} />
 
       {error && (
-        <p style={{ color: 'red', fontWeight: 'bold', marginTop: '20px' }}>{error}</p>
+        <>
+          <p style={{ color: 'red', fontWeight: 'bold', marginTop: '20px' }}>{error}</p>
+          {error.includes('expirado') && coords && (
+            <button onClick={() => obtenerCodigo(coords)} style={{ marginTop: '10px' }}>
+              🔄 Obtener nuevo código
+            </button>
+          )}
+        </>
       )}
 
       {tienda && (
